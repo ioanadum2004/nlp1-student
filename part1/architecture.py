@@ -7,5 +7,7 @@ def build_mlp():
     activation='relu',          # Activation
     solver='adam',              # Optimizer
     max_iter=200,               # Maximum iterations
-    random_state=42             # Random state for reproducibility
+    random_state=42,             # Random state for reproducibility
+    verbose=True,
+    batch_size=1024,
 )
