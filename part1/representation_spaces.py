@@ -12,7 +12,8 @@ def token_indicators(text_tokens, vocab):
         lowercase=False,
     )
     return list(vectorizer.transform(text_tokens))
-    #return df["token_indicators"]
+    # return vectorizer.transform(text_tokens) # this return a matrix instead of the list w the rows
+    # return df["token_indicators"]
 
 def bag_of_words(text_tokens, vocab):
     vectorizer = CountVectorizer(
@@ -21,3 +22,4 @@ def bag_of_words(text_tokens, vocab):
         binary=False, 
     )
     return list(vectorizer.transform(text_tokens))
+    # return vectorizer.transform(text_tokens)
