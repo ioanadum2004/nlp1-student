@@ -13,3 +13,11 @@ def token_indicators(text_tokens, vocab):
     )
     return list(vectorizer.transform(text_tokens))
     #return df["token_indicators"]
+
+def bag_of_words(text_tokens, vocab):
+    vectorizer = CountVectorizer(
+        vocabulary=vocab,
+        analyzer=lambda x: x,
+        binary=False, 
+    )
+    return list(vectorizer.transform(text_tokens))
