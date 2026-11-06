@@ -81,7 +81,7 @@ def scipy_to_torch_sparse(x):
     Output: torch sparse tensor with the same shape and non-zero values.
     """
     x = x.tocoo()
-    indices = torch.tensor([x.row, x.col], dtype=torch.long)
+    indices = torch.from_numpy(np.vstack([x.row, x.col]).astype(np.int64))
     values = torch.tensor(x.data, dtype=torch.float32)
 
     return torch.sparse_coo_tensor(indices, values, size=x.shape).coalesce()
