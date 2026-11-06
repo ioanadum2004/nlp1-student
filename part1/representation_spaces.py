@@ -116,7 +116,7 @@ class Tfidf(Encoder):
         ids = self.tokenizer.encode(x)
         vector = csr_matrix(([1.0] * len(ids), ([0] * len(ids), ids)), shape=(1, len(self)))
         vector.sum_duplicates()
-        vector.data *= self.idf[vec.indices]
+        vector.data *= self.idf[vector.indices]
 
         if self.norm:
             length = np.linalg.norm(vector.data)
