@@ -11,7 +11,7 @@ import json
 import numpy as np
 
 class SparseMLP(nn.Module):
-    """One-hidden-layer MLP that accepts sparse input tensors.
+    """MLP with one or more hidden layers that accepts sparse input tensors.
 
     Inputs: feature vectors of size `input_dim` (e.g. bag-of-words).
     Process: sparse matmul into a dense hidden layer, ReLU + dropout, linear (num_classes) and log-softmax outputs
@@ -19,12 +19,13 @@ class SparseMLP(nn.Module):
     Output: logprobs over `num_classes`.
     """
 
-    def __init__(self, input_dim, hidden_dim, num_classes, dropout=0.2):
+    def __init__(self, input_dim, hidden_dim, num_classes, dropout=0.2, num_hidden_layers=1):
         """
         input_dim: size of the input feature space (e.g. vocabulary size)
-        hidden_dim: width of the hidden layer
+        hidden_dim: width of each hidden layer
         num_classes: number of output labels
         dropout: fraction of hidden units zeroed during training (regularisation)
+        num_hidden_layers: number of hidden layers
         """
         super().__init__()
 
@@ -38,6 +39,11 @@ class SparseMLP(nn.Module):
 
         self.activation = nn.ReLU()
         self.dropout = nn.Dropout(dropout)
+
+        extra_layers = []
+        for _ in range(num_hidden_layers - 1):
+            extra_layers += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU(), nn.Dropout(dropout)]
+        self.hidden = nn.Sequential(*extra_layers)
 
         # Everything after the first layer is dense.
         self.output = nn.Sequential(
@@ -55,6 +61,7 @@ class SparseMLP(nn.Module):
 
         x = self.activation(x)
         x = self.dropout(x)
+        x = self.hidden(x)
         # logprobs
         return self.output(x)
 
@@ -187,7 +194,8 @@ def evaluate(model, dataloader, criterion, device="cpu"):
 
 def train_neural_network_model(training_set, validation_set, num_classes, encoder, save_to,   
                                 hidden_dim=128, dropout=0.1, batch_size=64, learning_rate=1e-3, 
-                                weight_decay=1e-4, num_epochs=20, device=torch.device("cpu")):
+                                weight_decay=1e-4, num_epochs=20, device=torch.device("cpu"),
+                                num_hidden_layers=1):
     """Encode texts, train SparseMLP, and checkpoint the best validation model.
 
     Inputs: train/val (text, label) pairs, num_classes, encoder (text -> sparse vector), path prefix to save weights,
@@ -241,11 +249,13 @@ def train_neural_network_model(training_set, validation_set, num_classes, encode
             'hidden_dim': hidden_dim, 
             'num_classes': num_classes, 
             'dropout': dropout,
+            'num_hidden_layers': num_hidden_layers,
         }
         json.dump(args, f, indent=2, ensure_ascii=False)
-        
-    # Create the model based on the input dimension, chosen hidden dimension, number of classification classes and dropout rate
-    model = SparseMLP(input_dim=len(encoder), hidden_dim=hidden_dim, num_classes=num_classes, dropout=dropout).to(device)
+
+    # Create the model based on the input dimension, chosen hidden dimension, number of classification classes, dropout rate and depth
+    model = SparseMLP(input_dim=len(encoder), hidden_dim=hidden_dim, num_classes=num_classes,
+                      dropout=dropout, num_hidden_layers=num_hidden_layers).to(device)
     criterion = nn.NLLLoss() # create the loss function
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay) # create the optimizer
 

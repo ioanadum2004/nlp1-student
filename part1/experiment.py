@@ -11,9 +11,9 @@ from collections import defaultdict, OrderedDict
 from tqdm.auto import tqdm
 import random
 
-from . import loglin
-from . import smlp
-from . import clslib
+import loglin
+import smlp
+import clslib
 
 
 
