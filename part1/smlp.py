@@ -10,6 +10,15 @@ import scipy.sparse
 import json
 import numpy as np
 
+
+def stack_vectors(vectors):
+    """Stack encoder outputs into one sparse N x D matrix.
+    Works for sparse 1 x D rows (representation_spaces encoders) and for
+    dense 1D numpy vectors (e.g. the tutorial's encoders)."""
+    if scipy.sparse.issparse(vectors[0]):
+        return scipy.sparse.vstack(vectors, format="csr")
+    return scipy.sparse.csr_matrix(vectors)
+
 class SparseMLP(nn.Module):
     """MLP with one or more hidden layers that accepts sparse input tensors.
 
@@ -72,7 +81,7 @@ def scipy_to_torch_sparse(x):
     Output: torch sparse tensor with the same shape and non-zero values.
     """
     x = x.tocoo()
-    indices = torch.tensor([x.row, x.col], dtype=torch.long)
+    indices = torch.from_numpy(np.vstack([x.row, x.col]).astype(np.int64))
     values = torch.tensor(x.data, dtype=torch.float32)
 
     return torch.sparse_coo_tensor(indices, values, size=x.shape).coalesce()
@@ -218,8 +227,8 @@ def train_neural_network_model(training_set, validation_set, num_classes, encode
     print(f"Document transformation done! Time taken: {time_document_to_vector - time_start:.3f} seconds")
     
     # Keep SciPy sparse here; conversion to torch happens in sparse_collate
-    X_train_sparse = csr_matrix(training_vectors)
-    X_val_sparse = csr_matrix(validation_vectors)
+    X_train_sparse = stack_vectors(training_vectors)
+    X_val_sparse = stack_vectors(validation_vectors)
 
     train_dataset = SparseDataset(X_train_sparse, training_labels) # create the training dataset
     val_dataset = SparseDataset(X_val_sparse, validation_labels) # create the validation dataset
@@ -332,7 +341,7 @@ def predict_probs(texts, model, encoder, batch_size=10):
     vectors = [encoder(x) for x in texts]
     labels = [0 for _ in texts]
 
-    x_sparse = csr_matrix(vectors)
+    x_sparse = stack_vectors(vectors)
 
     dl = DataLoader(
         SparseDataset(x_sparse, labels),
