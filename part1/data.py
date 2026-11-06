@@ -27,8 +27,10 @@ class GoEmotions:
 
     drop_multi_labels: if True -> drop comments that have more than one label
         and add a "label" column with the single int label
+    merge_train_dev: if True -> concatenate dev into train and remove the dev split
+        (useful when doing our own cross-validation splits on the training data)
     """
-    def __init__(self, drop_multi_labels=False):
+    def __init__(self, drop_multi_labels=False, merge_train_dev=False):
         self.path = os.path.join(
             kagglehub.dataset_download("debarshichanda/goemotions"), "data"
         )
@@ -36,6 +38,11 @@ class GoEmotions:
         self.splits = {
             name: load_data(self.path, name, drop_multi_labels) for name in SPLITS
         }
+        self.merge_train_dev = merge_train_dev
+        if merge_train_dev:
+            self.splits["train"] = pd.concat(
+                [self.splits["train"], self.splits.pop("dev")], ignore_index=True
+            )
         with open(os.path.join(self.path, "emotions.txt")) as f:
             self.emotions = f.read().split()
 
@@ -45,6 +52,8 @@ class GoEmotions:
 
     @property
     def dev(self):
+        if self.merge_train_dev:
+            raise AttributeError("dev was merged into train (merge_train_dev=True)")
         return self.splits["dev"]
 
     @property

@@ -20,7 +20,7 @@ def load(path):
         logistic_model = pickle.load(f)
     return logistic_model
 
-def fit(training_set, encoder: 'Encoder', save_to=None, max_iter=100, n_jobs=-1):
+def fit(training_set, encoder: 'Encoder', save_to=None, max_iter=100, n_jobs=-1, tol=1e-4, solver="saga"):
     """
     Constructs, trains and returns a softmax regressor.
     
@@ -36,8 +36,14 @@ def fit(training_set, encoder: 'Encoder', save_to=None, max_iter=100, n_jobs=-1)
     X_train_sparse = stack_vectors(training_vectors)
 
     # Train the logistic model
-    logistic_model = LogisticRegression(solver="saga", max_iter=max_iter, n_jobs=n_jobs) #sparse matrix frinedly solver 
+    logistic_model = LogisticRegression(solver=solver, max_iter=max_iter, tol=tol, n_jobs=n_jobs)
     logistic_model.fit(X_train_sparse, training_labels)
+
+    n_iter = int(max(logistic_model.n_iter_))
+    if n_iter >= max_iter:
+        print(f"WARNING: logistic regression did NOT converge ({n_iter}/{max_iter} iterations). Increase max_iter.")
+    else:
+        print(f"Logistic regression converged in {n_iter} iterations.")
 
     if save_to is not None:        
         with open(f"{save_to}.pickle", 'wb') as f:

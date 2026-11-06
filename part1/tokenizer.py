@@ -43,3 +43,8 @@ class WordTokenizer:
     def save(self, path):
         with open(path, "w") as f:
             json.dump(self.vocab, f)
+
+    def load(self, path):
+        with open(path) as f:
+            self.vocab = json.load(f)
+        return self
