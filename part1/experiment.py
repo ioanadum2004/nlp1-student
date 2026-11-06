@@ -157,6 +157,29 @@ def cross_validation_experiment(data_splits, outcome_space, encoder: 'Encoder', 
     return {'models': models, 'predictions': predictions, 'accuracies': accuracies}
 
 
+def load_cross_validation_experiment(data_splits, encoder: 'Encoder', model_option: str, load_from):
+    models, predictions, accuracies = OrderedDict(), OrderedDict(), OrderedDict()
+
+    for fold in tqdm(data_splits.keys()):
+        validation_set = data_splits[fold]["validation"]
+        texts = [text for text, gold_label in validation_set]
+        gold_labels_validation = [gold_label for text, gold_label in validation_set]
+
+        model_path = f"{load_from}/fold-{fold}/model"
+        if model_option == 'logistic':
+            predictions[fold] = loglin.predict(texts, loglin.load(model_path), encoder)
+        elif model_option == 'mlp':
+            probs = smlp.predict_probs(texts, smlp.load(model_path), encoder, batch_size=512)
+            predictions[fold] = probs.argmax(axis=1)
+        else:
+            raise ValueError(f"Unkonwn model_option={model_option}")
+
+        models[fold] = model_path
+        accuracies[fold] = accuracy_score(gold_labels_validation, predictions[fold])
+
+    return {'models': models, 'predictions': predictions, 'accuracies': accuracies}
+
+
 class WrapperForLoglinearModel(clslib.ProbabilisticModel):
     """
     Wrapper to treat an instance of sklearn LogisticRegression in the API of a ProbabilisticModel
