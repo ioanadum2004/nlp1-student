@@ -86,7 +86,7 @@ class BagOfWords(Encoder):
 
 
 class Tfidf(Encoder):
-    """Like TokenIndicator, but uses tf-idf instead of 0/1"""
+    """Like BagOfWords, but weights the counts by idf (tf-idf)"""
 
     def __init__(self, tokenizer: Tokenizer, norm: bool = True):
         self.tokenizer = tokenizer
@@ -102,26 +102,26 @@ class Tfidf(Encoder):
         df = np.zeros(len(self))      # number of documents containing each token
         n_docs = 0
         for text in corpus:
-            ids = set(self.tokenizer.encode(text).ids)  
-            df[list(ids)] += 1
+            df[list(set(self.tokenizer.encode(text)))] += 1
             n_docs += 1
         # smoothed idf, same formula as sklearn: ln((1 + n) / (1 + df)) + 1
         self.idf = np.log((1 + n_docs) / (1 + df)) + 1
         return self
 
-    def __call__(self, x: str) -> "np.array":
-        """Represent x as a vector of tf-idf values"""
+    def __call__(self, x: str) -> csr_matrix:
+        """Represent x as a sparse 1 x D row of tf-idf values"""
         if self.idf is None:
             raise RuntimeError("Call fit(train_texts) before encoding.")
 
-        ids = self.tokenizer.encode(x).ids
-        tf = np.bincount(ids, minlength=len(self)).astype(float)   # raw term counts
-        vector = tf * self.idf                                      # tf-idf
+        ids = self.tokenizer.encode(x)
+        vector = csr_matrix(([1.0] * len(ids), ([0] * len(ids), ids)), shape=(1, len(self)))
+        vector.sum_duplicates()
+        vector.data *= self.idf[vec.indices]
 
         if self.norm:
-            length = np.linalg.norm(vector)
+            length = np.linalg.norm(vector.data)
             if length > 0:
-                vector /= length
+                vector.data /= length
         return vector
 
 class IdentityEncoder(Encoder):
