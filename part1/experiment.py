@@ -13,6 +13,7 @@ import random
 
 import loglin
 import smlp
+import svm
 import clslib
 
 
@@ -111,7 +112,7 @@ def cross_validation_split(pairs, k, seed=0):
 
     return cross_validation_sets
 
-def cross_validation_experiment(data_splits, outcome_space, encoder: 'Encoder', model_option:str, save_to="tmp", loglin_args=dict(), smlp_args=dict()):
+def cross_validation_experiment(data_splits, outcome_space, encoder: 'Encoder', model_option:str, save_to="tmp", loglin_args=dict(), smlp_args=dict(), svm_args=dict()):
     """
     Trains and evaluates k models using a k-fold data split for cross validation. 
     This function returns a dictionary with 
@@ -121,10 +122,11 @@ def cross_validation_experiment(data_splits, outcome_space, encoder: 'Encoder', 
     
     data_splits: the training/validation folds
     encoder: an instance of Encoder
-    model_option: for now this only supports 'logistic'
-        which tells this function to use train_logistic_model (defined earlier in this notebook)
+    model_option: 'logistic', 'mlp' or 'svm'
     save_to: folder where to store models
+    loglin_args: dict with training arguments for loglin.fit
     smlp_args: dict with training arguments for smlp.train_neural_network_model
+    svm_args: dict with training arguments for svm.fit (kernel, C, gamma, ...)
     """
 
     models, predictions, accuracies = OrderedDict(), OrderedDict(), OrderedDict()
@@ -150,9 +152,41 @@ def cross_validation_experiment(data_splits, outcome_space, encoder: 'Encoder', 
                 training_set, validation_set, len(outcome_space), encoder, save_to=f'{fold_folder}/model', **smlp_args
             )
             models[fold] = f'{fold_folder}/model'
-            accuracies[fold] = metrics[best_epoch]['val_metrics']['accuracy']            
+            accuracies[fold] = metrics[best_epoch]['val_metrics']['accuracy']
+        elif model_option == 'svm':
+            svm_model = svm.fit(training_set, encoder, save_to=f'{fold_folder}/model', **svm_args)
+            models[fold] = f'{fold_folder}/model'
+
+            predictions[fold] = svm.predict([text for text, gold_label in validation_set], svm_model, encoder)
+            gold_labels_validation = [gold_label for text, gold_label in validation_set]
+            accuracies[fold] = accuracy_score(gold_labels_validation, predictions[fold])
         else:
             raise ValueError(f"Unkonwn model_option={model_option}")
+
+    return {'models': models, 'predictions': predictions, 'accuracies': accuracies}
+
+
+def load_cross_validation_experiment(data_splits, encoder: 'Encoder', model_option: str, load_from):
+    models, predictions, accuracies = OrderedDict(), OrderedDict(), OrderedDict()
+
+    for fold in tqdm(data_splits.keys()):
+        validation_set = data_splits[fold]["validation"]
+        texts = [text for text, gold_label in validation_set]
+        gold_labels_validation = [gold_label for text, gold_label in validation_set]
+
+        model_path = f"{load_from}/fold-{fold}/model"
+        if model_option == 'logistic':
+            predictions[fold] = loglin.predict(texts, loglin.load(model_path), encoder)
+        elif model_option == 'mlp':
+            probs = smlp.predict_probs(texts, smlp.load(model_path), encoder, batch_size=512)
+            predictions[fold] = probs.argmax(axis=1)
+        elif model_option == 'svm':
+            predictions[fold] = svm.predict(texts, svm.load(model_path), encoder)
+        else:
+            raise ValueError(f"Unkonwn model_option={model_option}")
+
+        models[fold] = model_path
+        accuracies[fold] = accuracy_score(gold_labels_validation, predictions[fold])
 
     return {'models': models, 'predictions': predictions, 'accuracies': accuracies}
 

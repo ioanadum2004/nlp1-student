@@ -204,7 +204,7 @@ def evaluate(model, dataloader, criterion, device="cpu"):
 def train_neural_network_model(training_set, validation_set, num_classes, encoder, save_to,   
                                 hidden_dim=128, dropout=0.1, batch_size=64, learning_rate=1e-3, 
                                 weight_decay=1e-4, num_epochs=20, device=torch.device("cpu"),
-                                num_hidden_layers=1):
+                                num_hidden_layers=1, patience=None, min_delta=0.0):
     """Encode texts, train SparseMLP, and checkpoint the best validation model.
 
     Inputs: train/val (text, label) pairs, num_classes, encoder (text -> sparse vector), path prefix to save weights,
@@ -288,18 +288,16 @@ def train_neural_network_model(training_set, validation_set, num_classes, encode
             )
         
         # Saving the best model according to validation loss
-        if epoch != 0:
-            if val_metrics["loss"] <= best_val_loss:
-                best_val_loss = val_metrics["loss"]
-                torch.save(model.state_dict(), f"{save_to}.pt")
-                best_epoch = epoch
-                predictions = preds
-        else:
+        if epoch == 0 or val_metrics["loss"] < best_val_loss - min_delta:
             best_val_loss = val_metrics["loss"]
             torch.save(model.state_dict(), f"{save_to}.pt")
             best_epoch = epoch
             predictions = preds
-    
+
+        if patience is not None and epoch - best_epoch >= patience:
+            print(f"Early stopping at epoch {epoch + 1} (best epoch: {best_epoch + 1})")
+            break
+
     time_training = time.time()
     print(f"Training done! Time taken: {time_training - time_dataloader:.3f} seconds")
 
