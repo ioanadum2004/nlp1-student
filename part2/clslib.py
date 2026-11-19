@@ -7,6 +7,9 @@ from torch.nn.utils.rnn import pack_padded_sequence
 from torch.nn.utils.rnn import pad_sequence 
 import time
 from tqdm.auto import tqdm
+import html, subprocess
+from collections import Counter
+
 
 from zipfile import ZipFile
 from io import TextIOWrapper
@@ -101,13 +104,33 @@ class Vocabulary:
         return "\n".join(f"{i} {w}" for i, w in self.items())
 
 
+
+
+def tokenize_all(texts):
+    texts = [str(t).replace("\n", " ") for t in texts]
+    out = subprocess.run(
+        ["perl", "../tools/tokenizer.perl", "-l", "en", "-q"],
+        input="\n".join(texts), capture_output=True, encoding="utf-8", text=True
+    ).stdout
+    lines = out.split("\n")[:len(texts)]
+    return [[html.unescape(w) for w in line.split()] for line in lines]
+
+
 class Tokenizer:
     def tokens(self, text: str) -> list:
         """Tokenize as a list of string tokens"""
-        raise NotImplementedError("Implement me in subclass")
+        return tokenize_all([text])[0]
+
     def ids(self, text: str) -> list:
-        """Tokenize as a list of token ids"""
-        raise NotImplementedError("Implement me in subclass")
+        """Tokenize as a list of token ids (row indices into ft.vectors)"""
+        ids = []
+        for t in self.tokens(text):
+            if t in ft.key_to_index:
+                ids.append(ft.key_to_index[t])
+            elif t.lower() in ft.key_to_index:
+                ids.append(ft.key_to_index[t.lower()])
+            # tokens with no vector are skipped
+        return ids
 
 
 class BasicTokenizer(Tokenizer):
