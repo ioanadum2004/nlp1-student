@@ -104,33 +104,39 @@ class Vocabulary:
         return "\n".join(f"{i} {w}" for i, w in self.items())
 
 
-
-
-def tokenize_all(texts):
-    texts = [str(t).replace("\n", " ") for t in texts]
-    out = subprocess.run(
-        ["perl", "../tools/tokenizer.perl", "-l", "en", "-q"],
-        input="\n".join(texts), capture_output=True, encoding="utf-8", text=True
-    ).stdout
-    lines = out.split("\n")[:len(texts)]
-    return [[html.unescape(w) for w in line.split()] for line in lines]
-
-
 class Tokenizer:
+    def __init__(self, vocab: Vocabulary = None, tokenizer_path: str = "../tools/tokenizer.perl"):
+        self.vocab = vocab
+        self.tokenizer_path = tokenizer_path
+
+    def tokens_all(self, texts: list) -> list:
+        """Fast batch tokenization: runs Perl once for a list of strings"""
+        texts = [str(t).replace("\n", " ") for t in texts]
+        out = subprocess.run(
+            ["perl", self.tokenizer_path, "-l", "en", "-q"],
+            input="\n".join(texts), capture_output=True, encoding="utf-8", text=True
+        ).stdout
+        lines = out.split("\n")[:len(texts)]
+        return [[html.unescape(w) for w in line.split()] for line in lines]
+
     def tokens(self, text: str) -> list:
-        """Tokenize as a list of string tokens"""
-        return tokenize_all([text])[0]
+        """Tokenize a single string into a list of word strings"""
+        return self.tokens_all([text])[0]
+
+    def ids_all(self, texts: list) -> list:
+        """Fast batch conversion: list of strings -> list of token ID lists"""
+        if self.vocab is None:
+            raise ValueError("I need a vocabulary")
+        return [
+            [self.vocab.index(t.lower()) for t in toks]
+            for toks in self.tokens_all(texts)
+        ]
 
     def ids(self, text: str) -> list:
-        """Tokenize as a list of token ids (row indices into ft.vectors)"""
-        ids = []
-        for t in self.tokens(text):
-            if t in ft.key_to_index:
-                ids.append(ft.key_to_index[t])
-            elif t.lower() in ft.key_to_index:
-                ids.append(ft.key_to_index[t.lower()])
-            # tokens with no vector are skipped
-        return ids
+        """Tokenize a single string into a list of token IDs"""
+        if self.vocab is None:
+            raise ValueError("I need a vocabulary")
+        return [self.vocab.index(t.lower()) for t in self.tokens(text)]
 
 
 class BasicTokenizer(Tokenizer):
@@ -190,7 +196,7 @@ class BasicTokenizer(Tokenizer):
         
 
 def read_lines_from_file(path, encoding="utf-8"):
-    if path.endswith('.txt'):
+    if path.endswith(('.txt', '.vec')):  # added vec
         with open(path, 'r', encoding=encoding) as f:
             for line in f:
                 yield line.strip()
