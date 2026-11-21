@@ -11,10 +11,13 @@ from collections import defaultdict, OrderedDict
 from tqdm.auto import tqdm
 import random
 
-import loglin
-import smlp
-import svm
-import clslib
+try:
+    from . import loglin, smlp, svm, clslib
+except ImportError:
+    import loglin
+    import smlp
+    import svm
+    import clslib
 
 
 
