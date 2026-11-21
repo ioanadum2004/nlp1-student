@@ -120,9 +120,9 @@ def train(
 
     print("Tokenizing texts...")
     # Convert the training and validation sets to vectors
-    training_vectors = [tokenizer.ids(text) for text, label in training_set]
+    training_vectors = tokenizer.ids_all([text for text, label in training_set])
     training_labels = [int(label) for text, label in training_set]
-    validation_vectors = [tokenizer.ids(text) for text, label in validation_set]
+    validation_vectors = tokenizer.ids_all([text for text, label in validation_set])
     validation_labels = [int(label) for text, label in validation_set]
 
     time_tokenizing = time.time()
@@ -203,19 +203,29 @@ def train(
         if epoch != 0:
             if val_metrics["loss"] <= best_val_loss:
                 best_val_loss = val_metrics["loss"]
-                torch.save(model.state_dict(), f"{save_to}.pt")
+                torch.save(trainable_state_dict(model), f"{save_to}.pt")
                 best_epoch = epoch
         else:
             best_val_loss = val_metrics["loss"]
-            torch.save(model.state_dict(), f"{save_to}.pt")
+            torch.save(trainable_state_dict(model), f"{save_to}.pt")
             best_epoch = epoch
-    
+
+        patience = opt_kwargs.get('patience')
+        if patience is not None and epoch - best_epoch >= patience:
+            print(f"Early stopping: no improvement in val loss for {patience} epochs (best epoch: {best_epoch + 1})")
+            break
+
     time_training = time.time()
     print(f"Training done! Time taken: {time_training - time_dataloader:.3f} seconds")
 
     return metrics, best_epoch
 
     
+def trainable_state_dict(model):
+    frozen = {name for name, p in model.named_parameters() if not p.requires_grad}
+    return {k: v for k, v in model.state_dict().items() if k not in frozen}
+
+
 def load(path, emb_model: clslib.PretrainedEmbeddings, device="cpu"):
     """
     Reconstruct the model architecture (using {path}.json) and load trained weights (using {path}.pt) and return it.
@@ -248,7 +258,10 @@ def load(path, emb_model: clslib.PretrainedEmbeddings, device="cpu"):
         **args['regressor_kwargs']
     )
     
-    model.load_state_dict(state_dict)
+    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    frozen = {name for name, p in model.named_parameters() if not p.requires_grad}
+    if unexpected or set(missing) - frozen:
+        raise RuntimeError(f"State dict mismatch. Missing: {set(missing) - frozen}, unexpected: {unexpected}")
     model = model.to(device)
     return model
 
@@ -315,7 +328,7 @@ def predict_logprobs(
 ):
     """Receives a training set and a validation set and returns a trained neural network model"""
         
-    vectors = [tokenizer.ids(text) for text in texts]
+    vectors = tokenizer.ids_all(list(texts))
     labels = [0 for _ in texts]
 
     pad_id = model.encoder.pad_idx
@@ -345,3 +358,22 @@ def predict_logprobs(
             logprobs_list.extend(logprobs.cpu().numpy())
     
     return np.array(logprobs_list)
+
+def load_cross_validation_experiment(data_splits, tokenizer: clslib.Tokenizer, emb_model: clslib.PretrainedEmbeddings,
+                                     load_from, batch_size=256, device='cpu'):
+    models, predictions, accuracies = OrderedDict(), OrderedDict(), OrderedDict()
+
+    for fold in tqdm(data_splits.keys()):
+        validation_set = data_splits[fold]["validation"]
+        texts = [text for text, label in validation_set]
+        gold = np.array([int(label) for text, label in validation_set])
+
+        model_path = f"{load_from}/fold-{fold}/model"
+        model = load(model_path, emb_model, device=device)
+        preds = predict_logprobs(model, tokenizer, texts, batch_size=batch_size, device=device).argmax(-1)
+
+        models[fold] = model_path
+        predictions[fold] = preds
+        accuracies[fold] = float((preds == gold).mean())
+
+    return {'models': models, 'predictions': predictions, 'accuracies': accuracies}

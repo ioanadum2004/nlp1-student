@@ -2,7 +2,10 @@ import pickle
 import numpy as np
 from scipy.special import softmax
 from sklearn.svm import SVC
-from loglin import stack_vectors
+try:
+    from .loglin import stack_vectors
+except ImportError:
+    from loglin import stack_vectors
 
 
 def fit(
